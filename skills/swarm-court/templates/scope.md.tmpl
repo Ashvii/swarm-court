@@ -1,0 +1,65 @@
+# <Feature name>
+
+<!-- This file is the ONLY context every hunter and skeptic gets. They cannot see the chat.
+     Be concrete: paths, routes, tables, commands. Leave a section as "none" rather than deleting it.
+     Never paste .env values or secrets here. -->
+
+## Feature summary
+<!-- 3-6 sentences: what the feature does, who uses it, what changed (if this is a diff). -->
+
+## Files in scope
+<!-- One line each: path - role. -->
+- `app/Http/Controllers/ExampleController.php` - handles POST /api/example
+- `app/Models/Example.php` - Eloquent model, casts, relationships
+
+## Routes and HTTP verbs
+| Verb | URI | Controller@method | Middleware |
+|---|---|---|---|
+| POST | /api/example | ExampleController@store | auth:sanctum, throttle:60,1 |
+
+## Frontend
+<!-- Or "none". Stack (Blade/Livewire/Inertia+Vue/React/SPA), pages/components in scope with one-line roles,
+     which API calls each one makes (verb + route), the props/fields it reads, client-side validation,
+     polling/websockets, how auth/CSRF works (session cookie, Sanctum SPA, bearer token), frontend test commands,
+     and whether node_modules is installed. -->
+
+## Models and relationships
+<!-- Model -> relationships, fillable/guarded, casts, global scopes, observers. -->
+
+## Database tables, constraints and indexes
+<!-- table: columns that matter, types (decimal vs float!), FKs, unique indexes, plain indexes, soft deletes. -->
+
+## Jobs, queues, events, listeners, scheduled tasks
+<!-- class, queue connection, tries/backoff/timeout, ShouldBeUnique, afterCommit, schedule entries. -->
+
+## External services
+<!-- Payment gateways, webhooks, mail, storage, third-party APIs; how they are faked in tests. -->
+
+## Auth model
+<!-- Guards, roles, policies/gates in play, tenancy model (column, global scope, separate DB). -->
+
+## Business rules and state machines
+<!-- Numbered rules. Status transitions as "pending -> paid -> shipped; pending -> cancelled". Limits. -->
+
+## Performance budgets
+<!-- Latency/throughput targets the performance lane measures against (locally, with bench.py). Example:
+GET /api/exports: p95 <= 300 ms with 10k exports; POST /api/exports: p95 <= 500 ms; <= 10 queries per request;
+export job: <= 256 MB peak memory for 1M invoices. "none" = rubric defaults. Also: how to serve the app on
+127.0.0.1 (e.g. php artisan serve --host=127.0.0.1 --port=8099) and how to seed a test DB at two sizes. -->
+
+## How to run tests
+<!-- Exact commands, e.g.
+php artisan test --filter=Checkout
+vendor/bin/pest tests/Feature/CheckoutTest.php
+Generated tests live in .swarm-court/<run>/tests/; say how to run a test from there, e.g.
+php artisan test .swarm-court/<run>/tests/ExampleTest.php -->
+
+## Environment facts
+<!-- APP_ENV for tests (testing), test DB name (e.g. app_testing / sqlite :memory:), queue driver (sync/redis),
+     cache driver, PHP/Laravel versions. NO secret values. -->
+
+## Known gaps
+<!-- Things already known to be broken or untested; hunters should not re-report these. -->
+
+## Out of scope
+<!-- Explicitly excluded files, features, environments. -->

@@ -1,0 +1,6 @@
+# swarm-court run output
+.swarm-court/
+
+# Python
+__pycache__/
+*.pyc

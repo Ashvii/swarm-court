@@ -1,0 +1,32 @@
+---
+id: TMP-1                # temporary; qa.py assigns the final id (e.g. RC-001)
+lane: race-conditions    # your lane id
+title: Overselling the last unit under concurrent checkout
+severity: CRITICAL       # CRITICAL | HIGH | MEDIUM | LOW (see rubric.md)
+category: race           # race|authz|integrity|validation|perf|queue|ui|ops|logic
+location: app/Http/Controllers/OrderController.php:48
+root_cause: non-atomic read-check-decrement on inventory.quantity
+---
+## What breaks
+<!-- One or two sentences: the user-visible or data-visible damage. -->
+
+## Why (code evidence)
+<!-- file:line citations for every claim, e.g.
+- app/Http/Controllers/OrderController.php:44 reads quantity
+- app/Http/Controllers/OrderController.php:48 writes quantity - 1 with no lock or WHERE guard -->
+
+## Exact trigger
+<!-- Concrete input, sequence or timing, e.g.
+Product 7 has stock = 1. Two clients POST /api/checkout {"product_id":7,"quantity":1}
+at the same time (both requests read stock = 1 before either saves). -->
+
+## Expected vs actual
+<!-- Expected: ...
+Actual: ... -->
+
+## Suggested test
+<!-- Runnable test code for the detected stack (Pest/PHPUnit for Laravel).
+Race conditions: real parallelism (separate processes or DB connections + a barrier). -->
+
+## Suggested fix
+<!-- The smallest change that removes the root cause. -->

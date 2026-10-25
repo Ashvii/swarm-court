@@ -1,0 +1,394 @@
+{
+  "_comment": "swarm-court lane cards. Edit freely: qa.py reads this file on every run. 'prefix' is used for finding IDs (e.g. RC-001); 'aliases' are accepted by --lanes/--skip; checklist items are numbered 1..N in hunter briefs and in the coverage matrix.",
+  "lanes": [
+    {
+      "id": "functional",
+      "name": "Functional",
+      "prefix": "FN",
+      "aliases": [
+        "func",
+        "fn"
+      ],
+      "mission": "Prove the feature does what the business rules say, and fails correctly when it shouldn't succeed.",
+      "checklist": [
+        "Happy path with valid inputs",
+        "Invalid inputs (missing fields, wrong types, malformed values)",
+        "Boundary values (min, max, zero, negative, empty strings)",
+        "Optional fields (omitted, explicitly null, empty, populated)",
+        "Business rules (permissions, status transitions, limits, dependencies)",
+        "Duplicate actions (repeated submit, double-click, retry, refresh)",
+        "CRUD lifecycle (create, read, update, delete, restore)",
+        "Invalid state transitions",
+        "Error responses (status code, message, validation structure)",
+        "Regressions in neighbouring functionality"
+      ],
+      "techniques": [
+        "Map every route to its FormRequest/validator and compare the rules with the business rules in scope.md",
+        "Walk each status/state machine and try every transition that is NOT allowed",
+        "Feature tests that assert status code, JSON structure and the resulting DB state (assertDatabaseHas/Missing)",
+        "Probe null vs missing vs empty for every optional field (Laravel: 'sometimes', 'nullable', 'present', 'filled')",
+        "Re-run neighbouring feature tests that share models or services with the changed code"
+      ],
+      "evidence_standard": "Exact request payload + expected vs actual response/state.",
+      "skip_when": "Never skipped.",
+      "default_depth": 2
+    },
+    {
+      "id": "race-conditions",
+      "name": "Race conditions",
+      "prefix": "RC",
+      "aliases": [
+        "race",
+        "rc",
+        "concurrency"
+      ],
+      "mission": "Find any place two requests, workers, or callbacks touching the same resource can corrupt state.",
+      "checklist": [
+        "Two users update the same record -> no silent lost update",
+        "Two requests create the same unique entity -> only one succeeds or idempotent handling",
+        "Two workers process the same job -> no duplicate side effects",
+        "Concurrent stock or balance deductions -> no overselling or negative balance",
+        "Update and delete simultaneously -> no inconsistent or resurrected data",
+        "Two payment callbacks together -> applied exactly once",
+        "Job retries while the original still runs -> no duplicate processing or conflicting writes",
+        "Multiple requests change status -> only valid transitions commit"
+      ],
+      "techniques": [
+        "Look for read-check-write patterns without locks",
+        "Missing lockForUpdate() / sharedLock()",
+        "Non-atomic increment/decrement (read then save instead of a single UPDATE with a WHERE guard)",
+        "Uniqueness enforced only by validation rather than a DB unique index",
+        "Missing idempotency keys on payments and external API calls",
+        "Transactions that don't cover the whole invariant",
+        "firstOrCreate/updateOrCreate without a unique index",
+        "Jobs lacking ShouldBeUnique / WithoutOverlapping",
+        "Cache-based locks without expiry",
+        "Optimistic-locking (version) columns missing",
+        "HARD RULE: a single-threaded test that calls the same endpoint twice in sequence does NOT reproduce a race. Reproduction tests must use real parallelism: separate OS processes or separate DB connections (e.g. spawn N `php artisan` / `php -r` child processes, or Laravel's Concurrency facade / Process::pool, released together by a barrier such as a file lock or a DB advisory lock). If real parallelism is impossible in the sandbox, the finding can be at most LIKELY, never CONFIRMED."
+      ],
+      "evidence_standard": "The unguarded read-modify-write lines (file:line) + a parallel test and the final inconsistent state (e.g. quantity = -1, two orders, two payments).",
+      "skip_when": "Only static content or read-only endpoints with no shared mutable state.",
+      "default_depth": 2
+    },
+    {
+      "id": "data-integrity",
+      "name": "Data integrity",
+      "prefix": "DI",
+      "aliases": [
+        "integrity",
+        "di",
+        "data"
+      ],
+      "mission": "Find ways data ends up wrong, orphaned, partial, or lossy.",
+      "checklist": [
+        "Record missing, deleted or inaccessible",
+        "Related record missing or deleted",
+        "Nullable foreign keys and optional relationships",
+        "Empty and very large result sets",
+        "Duplicate records and conflicting unique keys",
+        "Invalid dates, leap days, month boundaries, timezone conversions (DST, UTC vs app timezone)",
+        "Numeric precision, rounding, overflow, decimal boundaries (floats for money!)",
+        "Unicode, emoji, whitespace-only, very long strings (column length truncation)",
+        "Unexpected or stale enum/status values",
+        "Partial failure in a multi-step operation",
+        "Transaction rollback leaving partial changes (emails, events, queue dispatches that fire before commit; use afterCommit)",
+        "Soft-deleted records in queries and uniqueness checks",
+        "Bulk operations with mixed valid and invalid rows"
+      ],
+      "techniques": [
+        "Compare model casts and migration column types (decimal vs float, string length vs validation max)",
+        "Find side effects (mail, events, dispatch, HTTP calls) inside DB::transaction that are not afterCommit",
+        "Check every relationship access for null-safety when the related row is deleted or soft-deleted",
+        "Look for unique checks that ignore deleted_at, and Rule::unique without ->ignore() on update",
+        "Probe Carbon parsing/formatting with the app timezone vs UTC and DST transition dates"
+      ],
+      "evidence_standard": "The exact input or sequence + the resulting wrong/orphaned/partial row(s) (table, column, value), with file:line of the code that allowed it.",
+      "skip_when": "No persistent writes in scope.",
+      "default_depth": 2
+    },
+    {
+      "id": "authz-security",
+      "name": "Authorization & security",
+      "prefix": "AZ",
+      "aliases": [
+        "authz",
+        "security",
+        "auth",
+        "sec",
+        "az"
+      ],
+      "mission": "Find any way to do or see something you shouldn't.",
+      "checklist": [
+        "Unauthenticated -> 401",
+        "Authenticated without permission -> 403",
+        "Changing an ID to reach another tenant's/user's record (IDOR)",
+        "Tenant isolation on EVERY read, write, export, background job and relationship traversal (withoutGlobalScopes, raw queries, DB::table, jobs losing tenant context, cache keys without tenant, signed URLs, exports)",
+        "Request validation rejects unexpected fields",
+        "Mass assignment ($guarded = [], $request->all() into create/update)",
+        "API resource/schema leaks of sensitive fields",
+        "Pagination/filter/sort/search injection",
+        "Rate limiting on expensive or sensitive endpoints (login, password reset, export, search)",
+        "Sensitive data in logs and error messages",
+        "CORS, CSRF, token/session expiry",
+        "SQL injection (raw/whereRaw/orderBy with user input)",
+        "Stored and reflected XSS"
+      ],
+      "techniques": [
+        "For every route: list middleware, the policy/gate call ($this->authorize, Gate::allows, can: middleware) and what happens when it is missing",
+        "Route-model binding without scoping (->scopeBindings(), where user_id = auth id)",
+        "Grep for withoutGlobalScope(s), DB::table, DB::raw, whereRaw, orderByRaw, selectRaw on code paths in scope",
+        "Compare $fillable/$guarded with what the request actually passes; check $hidden and API Resources for leaked fields",
+        "Act as user A and request user B's resources by ID in a feature test (actingAs)",
+        "Safety: payloads are only used against the local test app. No attack tooling, no scanning of external hosts."
+      ],
+      "evidence_standard": "The request made as which user/tenant, the resource it reached, and the missing check (file:line). A failing actingAs() test is the gold standard.",
+      "skip_when": "Never skipped for anything reachable by a user, API client, or job.",
+      "default_depth": 2
+    },
+    {
+      "id": "database",
+      "name": "Database",
+      "prefix": "DB",
+      "aliases": [
+        "db",
+        "sql"
+      ],
+      "mission": "Make the database the last line of defence and make sure it performs.",
+      "checklist": [
+        "Foreign key and unique constraints exist and match business rules",
+        "Commit on success and rollback on failure",
+        "Concurrent writes preserve invariants",
+        "Indexes on all filter/sort/join columns used by this feature",
+        "No N+1 on list and detail endpoints (missing eager loading, preventLazyLoading behaviour)",
+        "Soft-delete / restore / cascade correctness",
+        "Migration works on a POPULATED database (default values for new NOT NULL columns, long-running locks on big tables)",
+        "Rollback or forward-recovery path verified",
+        "Connection loss and deadlock retry handled safely (and not retried when the operation is non-idempotent)"
+      ],
+      "techniques": [
+        "Read every migration in scope; list constraints and indexes; compare with the queries the code issues",
+        "Count queries per request with DB::listen / DB::enableQueryLog on a handful of rows",
+        "EXPLAIN the feature's queries on a small seeded dataset",
+        "Check down() methods and whether a migration can run twice or on existing rows",
+        "Look for DB::transaction(..., attempts) wrapping non-idempotent side effects"
+      ],
+      "evidence_standard": "Migration/query file:line + the constraint or index that is missing (or the query count / EXPLAIN output) and the concrete data that violates or slows it.",
+      "skip_when": "No database access in scope.",
+      "default_depth": 2
+    },
+    {
+      "id": "queue-cache-external",
+      "name": "Queue, cache & external services",
+      "prefix": "QC",
+      "aliases": [
+        "queue",
+        "cache",
+        "external",
+        "qc",
+        "jobs"
+      ],
+      "mission": "Break asynchronous and integration behaviour.",
+      "checklist": [
+        "Job succeeds normally",
+        "Retries after transient failure",
+        "Permanent failure lands in failed_jobs (or equivalent)",
+        "Retried jobs don't duplicate DB changes or external side effects (emails, charges, webhooks)",
+        "Worker timeout < retry_after consistency",
+        "Job payloads serialise models safely (deleted models, SerializesModels)",
+        "Redis unavailable -> safe degradation or clear failure",
+        "Cache invalidation after relevant writes",
+        "Stale cache can't expose unauthorised or outdated data",
+        "External API timeout, 429, malformed response, outage handled with backoff and circuit breaking",
+        "Webhook signature validated and duplicate delivery is safe",
+        "Out-of-order webhook delivery",
+        "Scheduled jobs don't overlap or silently skip work (withoutOverlapping, onOneServer)"
+      ],
+      "techniques": [
+        "Read config/queue.php retry_after vs job $timeout / worker --timeout",
+        "List every side effect inside handle() and ask what happens if handle() runs twice",
+        "Use Queue::fake / Bus::fake / Http::fake / Event::fake / Mail::fake; never call real external services",
+        "Check $tries, $backoff, failed() and $deleteWhenMissingModels on each job",
+        "For webhooks: signature check before any work, unique provider event id stored, status transitions guarded"
+      ],
+      "evidence_standard": "The job/listener/webhook file:line + the replay/retry/outage sequence and the duplicated or lost side effect, using fakes (no real external calls).",
+      "skip_when": "No jobs, listeners, cache, scheduler, webhooks or external HTTP calls in scope.",
+      "default_depth": 2
+    },
+    {
+      "id": "performance",
+      "name": "Performance & latency",
+      "prefix": "PF",
+      "aliases": [
+        "perf",
+        "pf",
+        "latency",
+        "speed",
+        "bench"
+      ],
+      "mission": "Measure latency on the local app and find what falls over at 10x: endpoints whose p95 breaks the budget, cost that grows faster than the data, too many queries, memory blow-ups, and slow pages.",
+      "checklist": [
+        "Latency of every endpoint in scope: p50/p95/p99 measured locally with bench.py against the budget in scope.md (rubric defaults if none)",
+        "Scaling: the same endpoint/job at two data sizes (e.g. 1k vs 10k rows); growth must be flat or sublinear for paginated reads",
+        "Query count per request (DB::listen / query log): N+1, queries inside loops, missing eager loading",
+        "Query plans: EXPLAIN on filter/sort/join columns; unbounded queries and accidental full-table scans",
+        "Memory in exports/imports/bulk operations (get() vs chunk/cursor/lazy): peak memory at two data sizes",
+        "Pagination, chunking and streaming for anything that can return many rows",
+        "Expensive reports and integrations run async (queue) instead of inside the request",
+        "Lock contention and long transactions on hot rows/tables",
+        "Frontend cost: requests per page load, polling frequency, payload size, re-render on every poll, bundle size if a build exists",
+        "Behaviour when DB, Redis or queue capacity is saturated (timeouts, retries, backpressure) - by reasoning, never by generating load"
+      ],
+      "techniques": [
+        "Serve the app (or a minimal reproduction) on 127.0.0.1 and time it ONLY with bench.py (http/cmd/compare); it refuses non-local targets and caps every run",
+        "Seed a TEST SQLite/MySQL DB at two sizes and use `bench.py compare --size-small N --size-large 10N`: superlinear growth is the strongest evidence",
+        "Count queries with DB::listen / DB::enableQueryLog (or the stack's equivalent) and save the output under .swarm-court/<run>/tests/",
+        "EXPLAIN the feature's queries on the seeded data; save the plans",
+        "memory_get_peak_usage() (or the stack's equivalent) around jobs/exports at two sizes",
+        "Static analysis first: loops that query, ->get()/->all() without limits, missing pagination, work that should be queued",
+        "Safety: bench.py measurements only, never heavy load or stress tests, never against anything but localhost"
+      ],
+      "evidence_standard": "file:line of the slow/unbounded code + a saved measurement under .swarm-court/<run>/tests/ (bench.py JSON, query counts, EXPLAIN, peak memory), ideally at two data sizes showing the growth, compared with the budget.",
+      "skip_when": "Trivial changes (copy, config, single-row reads) unless latency was explicitly requested.",
+      "default_depth": 2
+    },
+    {
+      "id": "frontend",
+      "name": "Frontend logic & security",
+      "prefix": "FE",
+      "aliases": [
+        "fe",
+        "js",
+        "spa",
+        "client",
+        "vue",
+        "react",
+        "livewire",
+        "inertia"
+      ],
+      "mission": "Find bugs in the code that runs in the browser: broken API contracts, stale or racing requests, client-only security, XSS sinks, leaked timers, and state that drifts from the server.",
+      "checklist": [
+        "API contract: every field a component reads exists in the API/Resource/Inertia-prop response with the same name, type, nullability and pagination shape",
+        "Client-side validation matches the server rules (required, formats, min/max, date order); server 422 errors are mapped to the right fields",
+        "Stale or out-of-order responses: a slower earlier request cannot overwrite a newer one (search, filters, pagination, tab switches); requests are aborted or sequenced",
+        "Repeated actions: submit buttons disabled or requests de-duplicated while pending (double click, Enter + click, retry)",
+        "Failed requests are surfaced, not swallowed (missing catch, unhandled promise, generic message hiding the real error, error boundary)",
+        "Client-only security: actions hidden in the UI but allowed by the API, route guards without server checks, permissions or IDs taken from client state",
+        "Secrets and data leaks: tokens or keys in the JS bundle, auth tokens in localStorage, Inertia shared props or page props exposing fields the user must not see",
+        "XSS sinks: v-html, {!! !!}, x-html, dangerouslySetInnerHTML, innerHTML, user content in href/src (javascript:), unescaped Livewire/Alpine output",
+        "Livewire/Alpine: public properties and action parameters are client-controlled (#[Locked], authorization inside actions, wire:model on sensitive fields)",
+        "Polling, websockets, intervals and listeners stop on unmount and on terminal states; no duplicate pollers after re-render or navigation",
+        "Optimistic updates roll back on failure; local state matches the server after an error, refresh or reconnect",
+        "Routing and deep links: refresh, back button, direct URL and query-string state behave; 403/404/419 (CSRF/session expired) are handled",
+        "Dates, numbers and money: timezone/locale formatting, no float maths on money, date inputs sent in the format the server expects",
+        "Downloads and uploads: auth on file requests, filenames, blob/object-URL cleanup, size/type limits enforced server-side too"
+      ],
+      "techniques": [
+        "List every HTTP call (axios/fetch/useFetch/router.get/post, Inertia router, wire: actions) and map it to its backend route; then diff the fields the template reads against what the controller/API Resource actually returns",
+        "Grep for XSS sinks: v-html, x-html, {!!, dangerouslySetInnerHTML, innerHTML, insertAdjacentHTML, :href bound to user data",
+        "Grep for setInterval/setTimeout/addEventListener/Echo.listen and check the matching cleanup (onUnmounted/onBeforeUnmount/useEffect return/Alpine destroy)",
+        "For every async handler: is there a catch? Is the pending flag reset in finally? Can two calls interleave?",
+        "Component tests with Vitest/Jest + Testing Library or @vue/test-utils, mocking HTTP (vi.fn/msw), when node_modules is installed. E2E (Playwright/Cypress) only if already installed and only against localhost",
+        "Without node_modules: deterministic static proof (e.g. the API Resource has no download_url, so the template reads undefined), or a minimal plain-node script under .swarm-court/<run>/tests/ reproducing the logic (e.g. two promises resolving out of order)",
+        "Security bugs found here (XSS, client-only authorization, leaked data) use category authz so the release gate treats them as security; logic/state bugs use category frontend",
+        "Never install dependencies and never start servers on a public interface"
+      ],
+      "evidence_standard": "Component file:line + the user action sequence + what the user sees vs what they should see. For contract bugs, also the backend file:line that proves the field/shape is missing. CONFIRMED needs a component/E2E test run or a deterministic static proof.",
+      "skip_when": "No browser code in scope (no JS/TS/Vue/React/Svelte files, no Blade/Livewire/Inertia views).",
+      "default_depth": 2
+    },
+    {
+      "id": "ui-ux",
+      "name": "UI / UX",
+      "prefix": "UI",
+      "aliases": [
+        "ui",
+        "ux",
+        "a11y"
+      ],
+      "mission": "Find where the interface lies to, loses, or blocks the user.",
+      "checklist": [
+        "Loading, empty, success and error states",
+        "Form errors shown beside the relevant field",
+        "Double submission prevented",
+        "Refresh and back-navigation don't corrupt state",
+        "Session expiry handled",
+        "Responsive layout",
+        "Accessibility (labels, focus, contrast, keyboard)",
+        "Date/time display respects configured timezone",
+        "Accurate status while background processing is pending"
+      ],
+      "techniques": [
+        "Read Blade/Livewire/Inertia/Vue/React components for every state branch",
+        "Check submit buttons for disabled/pending handling and server-side idempotency",
+        "Check form error bag binding per field",
+        "Check that timestamps are formatted in the user's/app timezone",
+        "Check form controls for associated labels, buttons for accessible names, icon-only buttons for aria-label, and focus management after dialogs/navigation"
+      ],
+      "evidence_standard": "Component file:line + the user action sequence + what the user sees vs what they should see.",
+      "skip_when": "No UI (views, components, pages) in scope.",
+      "default_depth": 2
+    },
+    {
+      "id": "chaos-ops",
+      "name": "Chaos & ops",
+      "prefix": "OP",
+      "aliases": [
+        "ops",
+        "chaos",
+        "op",
+        "deploy"
+      ],
+      "mission": "Find what breaks on deploy, under failure, or at 3am when nobody is watching.",
+      "checklist": [
+        "Environment variables and secrets present and correct",
+        "Production debug off",
+        "Migrations and deploy order safe",
+        "Queue workers restart on release (queue:restart) and use the right release",
+        "Logs carry correlation IDs without sensitive data",
+        "Monitoring and alerts for failures, latency, queue backlog",
+        "Backup restore tested",
+        "Rollback and incident recovery documented"
+      ],
+      "techniques": [
+        "Read config/*.php, .env.example, deploy scripts, CI config, Dockerfiles, Procfile/supervisor configs",
+        "Check that new env keys have config() defaults and are in .env.example (never print real .env values)",
+        "Check deploy order: migrate before code that needs new columns; code tolerant of old schema during rollout",
+        "Note: mostly static/config review. Never run destructive commands."
+      ],
+      "evidence_standard": "Config/deploy file:line + the deploy or failure sequence and its consequence.",
+      "skip_when": "Pure refactor with no config, deploy, migration or infrastructure impact.",
+      "default_depth": 2
+    },
+    {
+      "id": "adversary",
+      "name": "Adversary",
+      "prefix": "AD",
+      "aliases": [
+        "adv",
+        "ad",
+        "chaos-user",
+        "hostile"
+      ],
+      "mission": "Ignore the checklist and break the feature like a hostile or clumsy real user.",
+      "checklist": [
+        "Replay requests",
+        "Reorder steps",
+        "Stale tabs and expired tokens",
+        "Call the API directly, skipping the UI",
+        "Absurd sizes (huge payloads, huge numbers, huge lists)",
+        "Switch accounts mid-flow",
+        "Double-click everything",
+        "Abuse optional parameters",
+        "Chain two features together in ways nobody designed"
+      ],
+      "techniques": [
+        "Start from every public entry point (routes, webhooks, signed URLs, commands) and ask what the UI was protecting",
+        "Combine this feature with neighbouring ones (cancel then pay, refund then ship, delete then restore)",
+        "Treat every client-supplied value (prices, totals, IDs, flags) as attacker-controlled"
+      ],
+      "evidence_standard": "The exact request sequence a real user or attacker would send + the resulting state.",
+      "skip_when": "Never skipped.",
+      "default_depth": 2
+    }
+  ]
+}

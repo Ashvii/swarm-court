@@ -1,0 +1,21 @@
+{
+  "name": "swarm-court",
+  "owner": {
+    "name": "Ashvii"
+  },
+  "metadata": {
+    "description": "swarm-court: a QA team of Claude Code sub-agents with skeptic verification and a release gate.",
+    "version": "1.0.2"
+  },
+  "plugins": [
+    {
+      "name": "swarm-court",
+      "source": "./",
+      "description": "Split QA across specialist sub-agents, verify every finding with a skeptic, and get one deduplicated, severity-ranked report with test cases and a PASS/WARN/BLOCK release gate.",
+      "version": "1.0.2",
+      "license": "MIT",
+      "keywords": ["qa", "testing", "laravel", "security", "race-conditions"],
+      "category": "testing"
+    }
+  ]
+}

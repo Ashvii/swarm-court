@@ -1,0 +1,21 @@
+---
+finding_id: {finding-id}
+verdict: LIKELY          # CONFIRMED | LIKELY | LATENT | DISPUTED | NEEDS-ENV
+evidence: app/Http/Controllers/OrderController.php:48   # REQUIRED: at least one file:line
+test: none               # path under .swarm-court/<run>/tests/ if you wrote one, else none
+parallel_test: no        # yes ONLY if the test ran the trigger in real parallel (processes / DB connections)
+measurement: none        # performance claims: file under .swarm-court/<run>/tests/ (bench.py JSON, query counts, EXPLAIN)
+---
+## Reasoning
+<!-- Your own analysis. You did not see the hunter's reasoning. -->
+
+## Evidence
+<!-- file:line citations. DISPUTED: the exact guard that prevents the trigger.
+CONFIRMED: the command you ran and the observed output (trimmed). -->
+
+## Reproduction
+<!-- CONFIRMED: test path, command, output. LIKELY: what blocked reproduction. -->
+
+## What would settle it
+<!-- NEEDS-ENV: the infrastructure or data needed (e.g. real Redis outage, payment sandbox,
+production-scale data). Otherwise "n/a". -->
